@@ -296,7 +296,7 @@ Refer official doc : https://docs.microsoft.com/en-us/aspnet/core/tutorials/firs
       public class TodoService
       {
     +    private IMongoCollection<TodoItem> _todosCollection;
-  +    public TodoService(MongoSettings settings)
+    +    public TodoService(MongoSettings settings)
     +    {
     +      _todosCollection = new MongoClient(settings.ConnectionString)
     +              .GetDatabase(settings.DbName)
