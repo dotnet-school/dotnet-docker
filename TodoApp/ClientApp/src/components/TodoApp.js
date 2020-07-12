@@ -1,4 +1,5 @@
 import React from 'react';
+import './todo-app.css';
 
 const fetchItems = (baseUrl) => fetch(`${baseUrl}/todos`);
 
@@ -13,6 +14,10 @@ const updateTodoItem = (baseUrl, todo) => fetch(`${baseUrl}/todos/${todo.id}`, {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(todo)
 });
+
+const deleteTodoItem = (baseUrl, id) => fetch(`${baseUrl}/todos/${id}`, {
+    method: "DELETE"
+})
 
 const TodoApp = ({baseUrl}) => {
     const [list, setList] = React.useState([]); 
@@ -45,16 +50,28 @@ const TodoApp = ({baseUrl}) => {
         setLoading(false);
     };
     
-    const content = <div>
-        <input disabled={isLoading} placeholder="Enter a task name" ref={inputRef}/>
-        <button disabled={isLoading} onClick={onCreateItem}>Add Task</button>
-        <ul>
-            {list.map(item => (<li key={item.id}>
-                <input 
-                    type='checkbox' checked={item.isCompleted} onChange={(e) => setTaskStatus(item, e.target.checked)}/>
-                {item.description} -
-                {item.isCompleted}
+    const onRemoveItem = async (e, item) => {
+        e.preventDefault();
+        setLoading(true);
+        await deleteTodoItem(baseUrl, item.id);
+        setLoading(false);
+    }
+    
+    const content = <div className='todo-app-container'>
+        <form>
+            <input disabled={isLoading} placeholder="Enter a task name" ref={inputRef}/>
+            <button disabled={isLoading} onClick={onCreateItem}>Add Task</button>
+        </form>
+        <ul className='todo-list'>
+            {list.map(item => (<li className="todo-list-item" key={item.id}>
+                <input
+                    type='checkbox' 
+                    checked={item.isCompleted} 
+                    onChange={(e) => setTaskStatus(item, e.target.checked)}/>
+                    <label>{item.description}</label>
+                    <a href="#" onClick={(e) => onRemoveItem(e, item)}>remove</a>
             </li>))}
+            
         </ul>
     </div>;
     

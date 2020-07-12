@@ -51,5 +51,14 @@ namespace TodoApp.Controllers
       return Ok();
     }
 
+    [HttpDelete("{id}")]
+    public ActionResult DeleteTas(string id)
+    {
+      var item = fakeItems.First(item => item.Id == id);
+      if (item == null) return NotFound();
+      fakeItems.Remove(item);
+      return Ok();
+    }
+
   }
 }
