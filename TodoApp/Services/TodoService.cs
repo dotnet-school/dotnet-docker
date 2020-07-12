@@ -1,46 +1,46 @@
 using System.Collections.Generic;
 using System.Linq;
+using MongoDB.Driver;
 using TodoApp.Models;
 
 namespace TodoApp.Services
 {
   public class TodoService
   {
-    private static IList<TodoItem> fakeItems = new List<TodoItem>()
+    private IMongoCollection<TodoItem> _todosCollection;
+
+    public TodoService(MongoSettings settings)
     {
-            new TodoItem() {Id = "one", Description = "task one", IsCompleted = true},
-            new TodoItem() {Id = "two", Description = "task two", IsCompleted = false},
-            new TodoItem() {Id = "three", Description = "task three", IsCompleted = false}
-    };
+      _todosCollection = new MongoClient(settings.ConnectionString)
+              .GetDatabase(settings.DbName)
+              .GetCollection<TodoItem>(settings.TodoCollection);
+    }
 
     public IEnumerable<TodoItem> GetAll()
     {
-      return fakeItems;
+      return _todosCollection.Find(t => true).ToList();
     }
 
     public TodoItem GetById(string id)
     {
-      return fakeItems.First(item => item.Id == id);
+      return _todosCollection.Find(t => t.Id == id).First();
     }
 
     public TodoItem UpdateItem(TodoItem data)
     {
-      var item = fakeItems.First(item => item.Id == data.Id);
-      item.Description = data.Description;
-      item.IsCompleted = data.IsCompleted;
-      return item;
+      _todosCollection.ReplaceOne(t => t.Id == data.Id, data);
+      return data;
     }
 
     public TodoItem CreateItem(TodoItem data)
     {
-      data.Id = $"task-{fakeItems.Count}";
-      fakeItems.Add(data);
+      _todosCollection.InsertOne(data);
       return data;
     }
 
     public void Delete(TodoItem item)
     {
-      fakeItems.Remove(item);
+      _todosCollection.DeleteOne(t => t.Id == item.Id);
     }
   }
 }

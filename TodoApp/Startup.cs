@@ -28,6 +28,12 @@ namespace TodoApp
 
             services.AddSingleton<TodoService>();
             
+            // This will map the model class to the section in appsettings.json
+            services.Configure<MongoSettings>(Configuration.GetSection(nameof(MongoSettings)));
+            
+            // This will inject the values from appsettings into model instance
+            services.AddSingleton<MongoSettings>(s => s.GetRequiredService<IOptions<MongoSettings>>().Value);
+
             // In production, the React files will be served from this directory
             services.AddSpaStaticFiles(configuration =>
             {

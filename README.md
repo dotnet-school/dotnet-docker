@@ -1,132 +1,101 @@
 
 
+To create a simple todo app with react and dotnet refer : https://github.com/dotnet-school/dotnet-react
+
+Refer official doc : https://docs.microsoft.com/en-us/aspnet/core/tutorials/first-mongo-app?view=aspnetcore-3.1&tabs=visual-studio
 
 
-- Create a project with
+
+### Steps to add mongo
+
+- Add mongo driver Nuget package
+- create mongo configuration in app settings
+- create model for mongo settings
+- wire mongo setting with dependency injection in Startup.cs
+- create a singleton service that uses mongo client
+- inject settings in service and initialize mongo client
+- wire controller to use the service
+- update model for mappign mongo ids
+
+
+
+### Install mongodb on local machine
+
+- install mongodb and make sure it works on local machine
+
+- use a gui tool like https://robomongo.org/
+
+- We can instead use docker to install mongo db in single step and remove image when we are done : 
 
   ```bash
-  # Create a react .net core boiler plate in current dir with namespace TodoApi
-  dotnet new react -n TodoApp
+  docker run  -i -v $PWD/db:/data/db -p 27017:27017 mongo:3.6.18
   ```
 
-- Add a .gitignore
+  - this will start a docker container that listens to port `27017`
+  - take a note of the db directory `$PWD/db`. If you change this, you will not see the data you saved earlier.
+  - you can run this as a backgroudn task (daemon mode) using flag `-d`
+  - connect with db to make sure our db is up and running 
 
-  ```properties
-  .fake/
-  obj/
-  bin/
-  .idea/
-  ```
 
-- open in rider
 
-  ```
-  rider .
-  ```
+### Setup project
 
-  - We have the react project in `ClientApp`
+- clone this repo  https://github.com/dotnet-school/dotnet-react
 
-- Run project in watch mode :
+- Creating a servivce
 
-  ```bash
-  dotnet watch run
-  ```
+  - Currenlty this has all fake logic in controller, we will move this logic to service 
+  - Then we will make this serice use mongo client to save and fetch data from database
 
-  - This should open url automatically : https://localhost:5001/
-
-- Create a controller for todo api
+- Create a service :  `TodoApp/Services/TodoService.cs`
 
   ```c#
   using System.Collections.Generic;
-  using Microsoft.AspNetCore.Mvc;
+  using System.Linq;
+  using MongoDB.Driver;
+  using TodoApp.Models;
   
-  namespace TodoApp.Controllers
+  namespace TodoApp.Services
   {
-    [ApiController]
-    [Route("/api/[controller")]
-    public class TodosController
+    public class TodoService
     {
-      [HttpGet]
-      public IEnumerable<string> GetAll()
-      {
-        return new List<string>() {"task-one", "task-two"};
-      }
     }
   }
   ```
 
-  - check the api :  https://localhost:5001/api/todos
-
-    ```yaml
-    [
-      "task-one",
-      "task-two"
-    ]
-    ```
-
-- Create a TODO Model
-
-  ```c#
-  namespace TodoApp.Models{
-  	public class TodoItem{
-  		public string Id {get;set;}
-  		public string Description {get; set;}
-  		public bool IsComplete {get; set;}
-  	}
-  }
-  ```
-
-- Now use the model in controller
+- Now wire this with the dependency injection in `Startup.cs` : 
 
   ```diff
-  [HttpGet]
-  - public IEnumerable<string> GetAll()
-  + public IEnumerable<TodoItem> GetAll()
-   {
-  -  return new List<string>() {"task-one", "task-two"};
-  +   return new List<TodoItem>()
-  +   {
-  +     new TodoItem(){Id = "one", Description = "task one", IsCompleted = true},
-  +     new TodoItem(){Id = "two", Description = "task two", IsCompleted = false},
-  +     new TodoItem(){Id = "three", Description = "task three", IsCompleted = false}
-  +   }; 
-   }
+  public void ConfigureServices(IServiceCollection services)
+  {
+  	services.AddControllersWithViews();
+  +	services.AddSingleton<TodoService>();
   ```
 
-  - now check the api again : https://localhost:5001/api/todos
+- Inject the service in controller: 
 
-    ```yaml
-    # Field names are automaticaaly changed from Pascal case to camelCase in json
-    [
-      {
-        "description": "task one",
-        "id": "one",
-        "isCompleted": true
-      },
-      {
-        "description": "task two",
-        "id": "two",
-        "isCompleted": false
-      },
-      {
-        "description": "task three",
-        "id": "three",
-        "isCompleted": false
-      }
-    ]
-    ```
+  ```diff
+  public class TodosController : ControllerBase
+  {
+  
+  +		private TodoService _todoService;
+  +		public TodosController(TodoService service)
+  +		{
+  +			_todoService = service;
+  +		}
+  
+  [HttpGet]
+  ```
 
+- Now just move all code for fake data items from controller to service: 
 
-
-- Create a completely fake controller so that we can work on react side to create todo list 
+  controller: 
 
   ```c#
-  using System;
   using System.Collections.Generic;
-  using System.Linq;
-  using System.Threading.Tasks;
   using Microsoft.AspNetCore.Mvc;
   using TodoApp.Models;
+  using TodoApp.Services;
   
   namespace TodoApp.Controllers
   {
@@ -134,164 +103,283 @@
     [Route("/api/[controller]")]
     public class TodosController : ControllerBase
     {
-      private static IList<TodoItem> fakeItems = new List<TodoItem>()
+      private TodoService _todoService;
+  
+      public TodosController(TodoService service)
       {
-        new TodoItem(){Id = "one", Description = "task one", IsCompleted = true},
-        new TodoItem(){Id = "two", Description = "task two", IsCompleted = false},
-        new TodoItem(){Id = "three", Description = "task three", IsCompleted = false}
-      };
-      
+        _todoService = service;
+      }
+  
       [HttpGet]
       public IEnumerable<TodoItem> GetAll()
       {
-        return fakeItems; 
-      }    
-      [HttpGet("{id}")]
-      public TodoItem GetById(string id)
-      {
-        return fakeItems.First(item => item.Id == id); 
+        return _todoService.GetAll();
       }
-      
+  
+      [HttpGet("{id}")]
+      public ActionResult<TodoItem> GetById(string id)
+      {
+        var todoItem = _todoService.GetById(id);
+        if (todoItem == null) return NotFound();
+        return todoItem;
+      }
+  
       [HttpPost]
       public ActionResult CreateItem(TodoItem data)
       {
-        data.Id = $"task-{fakeItems.Count}";
-        fakeItems.Add(data);
-        return CreatedAtAction("GetById", new {Id = data.Id}, data);
+        TodoItem todoItem = _todoService.CreateItem(data);
+        return CreatedAtAction("GetById", new {Id = todoItem.Id}, todoItem);
       }
-      
+  
       [HttpPut("{id}")]
       public ActionResult GetById(string id, TodoItem data)
       {
         if (id != data.Id) return BadRequest("Ids in path and data do not match");
-        
-        var item = fakeItems.First(item => item.Id == id);
+  
+        var item = _todoService.GetById(id);
+  
         if (item == null) return NotFound();
   
-        item.Description = data.Description;
-        item.IsCompleted = data.IsCompleted;
+        _todoService.UpdateItem(data);
   
         return Ok();
       }
   
-    }
-  }
-  ```
-
+      [HttpDelete("{id}")]
+      public ActionResult DeleteTas(string id)
+      {
+        var item = _todoService.GetById(id);
+        if (item == null) return NotFound();
   
-
-- Create a react todo list: 
-
-  ```javascript
-  // TodoApp/ClientApp/src/App.js
-  
-  import React, { Component } from 'react';
-  import TodoApp from './components/TodoApp';
-  
-  import './custom.css'
-  
-  export default class App extends Component {
-    static displayName = App.name;
-  
-    render () {
-      return <TodoApp baseUrl={'/api'}/>;
-    }
-  }
-  
-  ```
-
-  ```javascript
-  import React from 'react';
-  import './todo-app.css';
-  
-  const fetchItems = (baseUrl) => fetch(`${baseUrl}/todos`);
-  
-  const createTodoItem = (baseUrl, todo) => fetch(`${baseUrl}/todos`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(todo)
-  })
-  
-  const updateTodoItem = (baseUrl, todo) => fetch(`${baseUrl}/todos/${todo.id}`, {
-      method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(todo)
-  });
-  
-  const deleteTodoItem = (baseUrl, id) => fetch(`${baseUrl}/todos/${id}`, {
-      method: "DELETE"
-  })
-  
-  const TodoApp = ({baseUrl}) => {
-      const [list, setList] = React.useState([]); 
-      const [isLoading, setLoading] = React.useState(true);
-      const inputRef = React.useRef(null);
-      
-      const setupData = async () => {
-          const response = await fetchItems(baseUrl);
-          const data = await response.json();
-          setList(data);
-          setLoading(false);
-      };
-  
-      React.useEffect(() => {
-          setupData()
-          return () => {}
-      }, [isLoading]); 
-      
-      const onCreateItem = async () => {
-          const description = inputRef.current.value;
-          setLoading(true);
-          const result = await createTodoItem(baseUrl, {description});
-        setLoading(false);
-          inputRef.current.value = '';
-      };
-      
-      const setTaskStatus = async (item, isCompleted) => {
-          setLoading(true);
-          await updateTodoItem(baseUrl, {...item, isCompleted});
-          setLoading(false);
-      };
-      
-      const onRemoveItem = async (e, item) => {
-          e.preventDefault();
-          setLoading(true);
-          await deleteTodoItem(baseUrl, item.id);
-          setLoading(false);
+        _todoService.Delete(item);
+        return Ok();
       }
-      
-      const content = <div className='todo-app-container'>
-          <form>
-              <input disabled={isLoading} placeholder="Enter a task name" ref={inputRef}/>
-              <button disabled={isLoading} onClick={onCreateItem}>Add Task</button>
-          </form>
-          <ul className='todo-list'>
-              {list.map(item => (<li className="todo-list-item" key={item.id}>
-                  <input
-                      type='checkbox' 
-                      checked={item.isCompleted} 
-                      onChange={(e) => setTaskStatus(item, e.target.checked)}/>
-                      <label>{item.description}</label>
-                      <a href="#" onClick={(e) => onRemoveItem(e, item)}>remove</a>
-              </li>))}
-              
-          </ul>
-      </div>;
-      
-      return (
-          <>
-              <h3>Todo App</h3>
-              {content}
-          </>
-      );
-  };
-  
-  export default TodoApp;
+    }
+  }
   ```
+
+  service: 
+
+  ```c#
+  using System.Collections.Generic;
+  using System.Linq;
+  using TodoApp.Models;
+  
+  namespace TodoApp.Services
+  {
+    public class TodoService
+    {
+      private static IList<TodoItem> fakeItems = new List<TodoItem>()
+      {
+              new TodoItem() {Id = "one", Description = "task one", IsCompleted = true},
+              new TodoItem() {Id = "two", Description = "task two", IsCompleted = false},
+              new TodoItem() {Id = "three", Description = "task three", IsCompleted = false}
+      };
+  
+      public IEnumerable<TodoItem> GetAll()
+      {
+        return fakeItems;
+      }
+  
+      public TodoItem GetById(string id)
+      {
+        return fakeItems.First(item => item.Id == id);
+      }
+  
+      public TodoItem UpdateItem(TodoItem data)
+      {
+        var item = fakeItems.First(item => item.Id == data.Id);
+        item.Description = data.Description;
+        item.IsCompleted = data.IsCompleted;
+        return item;
+      }
+  
+      public TodoItem CreateItem(TodoItem data)
+      {
+        data.Id = $"task-{fakeItems.Count}";
+        fakeItems.Add(data);
+        return data;
+      }
+  
+      public void Delete(TodoItem item)
+      {
+        fakeItems.Remove(item);
+      }
+    }
+  }
+  ```
+
   
 
+### Setup Mongo with .NET project
+
+- Add mongo driver Nuget package
+
+  ```bash
+  cd TodoApp
+  dotnet add package MongoDB.Driver
+  ```
+	TodoApp.csproj:
+  ```diff
+     <ItemGroup>
+       <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="3.1.0" />
+  +    <PackageReference Include="MongoDB.Driver" Version="2.10.4" />
+     </ItemGroup>
+  
+     <ItemGroup>
+  ```
+
+  
+  
+- Create the mongo db settings in `appsettings.Development.json`
+
+  ```yaml
+    "MongoSettings": {
+      "ConnectionString": "mongodb://localhost:27017",
+      "DbName": "dotnet-mongo-demo",
+      "TodoCollection": "Todo"
+    }
+  ```
+
+- Create a model class that represents the settings.
+
+  - dotnet will load settings in object of this model 
+
+  - our service will recive this model to configure the mongo client
+
+    ```c#
+    namespace TodoApp.Models
+    {
+      public class MongoSettings
+      {
+        public string ConnectionString { get; set; }
+        public string DbName { get; set; }
+        public string TodoCollection { get; set; }
+      }
+    }
+    ```
+
+  
+
+- Wire the settings with DI in `TodoApp/Startup.cs`
+
+  ```diff
+  +using Microsoft.Extensions.Options;
+  +using TodoApp.Models;
+  
+  public void ConfigureServices(IServiceCollection services)
+  {
+  
+    services.AddControllersWithViews();
+  
+  + // This will map the model class to the section in appsettings.json
+  + services.Configure<MongoSettings>(Configuration.GetSection(nameof(MongoSettings)));
+  
+  + // This will inject the values from appsettings into model instance
+  + services.AddSingleton<MongoSettings>(s => s.GetRequiredService<IOptions<MongoSettings>>().Value);
+  
+    services.AddSpaStaticFiles(configuration =>
+  ```
 
 
-- Check app : https://localhost:5001/
 
-  ![todo-list](./docs/images/todo-list.gif)
+- Inject the settings into service: 
+
+  - We wil now inject these settings from `appsettings.json` into our service
+
+    ```diff
+    + using MongoDB.Driver;
+    using TodoApp.Models;
+
+    namespace TodoApp.Services
+    {
+      public class TodoService
+      {
+    +    private IMongoCollection<TodoItem> _todosCollection;
+  +    public TodoService(MongoSettings settings)
+    +    {
+    +      _todosCollection = new MongoClient(settings.ConnectionString)
+    +              .GetDatabase(settings.DbName)
+    +              .GetCollection<TodoItem>(settings.TodoCollection);
+    +    }
+      }
+    }
+  ```
+
+  
+
+- Update model for mongo 
+
+  ```diff
+  +using MongoDB.Bson;
+  +using MongoDB.Bson.Serialization.Attributes;
+  +
+   namespace TodoApp.Models
+   {
+     public class TodoItem
+     {
+  +    // Mongo uses BsonId for keys
+  +    [BsonId]
+  +    [BsonRepresentation(BsonType.ObjectId)]
+       public string Id {get;set;}
+  
+       public string Description {get; set;}
+       public bool IsCompleted {get; set;}
+     }
+  ```
+
+  
+
+- Now update service to read/write using mongo collectoins instead of im memory list
+
+  ```c#
+  using System.Collections.Generic;
+  using System.Linq;
+  using MongoDB.Driver;
+  using TodoApp.Models;
+  
+  namespace TodoApp.Services
+  {
+    public class TodoService
+    {
+      private IMongoCollection<TodoItem> _todosCollection;
+  
+      public TodoService(MongoSettings settings)
+      {
+        _todosCollection = new MongoClient(settings.ConnectionString)
+                .GetDatabase(settings.DbName)
+                .GetCollection<TodoItem>(settings.TodoCollection);
+      }
+  
+      public IEnumerable<TodoItem> GetAll()
+      {
+        return _todosCollection.Find(t => true).ToList();
+      }
+  
+      public TodoItem GetById(string id)
+      {
+        return _todosCollection.Find(t => t.Id == id).First();
+      }
+  
+      public TodoItem UpdateItem(TodoItem data)
+      {
+        _todosCollection.ReplaceOne(t => t.Id == data.Id, data);
+        return data;
+      }
+  
+      public TodoItem CreateItem(TodoItem data)
+      {
+        _todosCollection.InsertOne(data);
+        return data;
+      }
+  
+      public void Delete(TodoItem item)
+      {
+        _todosCollection.DeleteOne(t => t.Id == item.Id);
+      }
+    }
+  }
+  ```
+
+  
+

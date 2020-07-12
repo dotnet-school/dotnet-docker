@@ -232,4 +232,5 @@ _Pvt_Extensions
 .fake/
 
 # Rider
-.idea/
+.idea/../.idea/
+db
