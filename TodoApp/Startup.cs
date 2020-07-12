@@ -5,6 +5,9 @@ using Microsoft.AspNetCore.SpaServices.ReactDevelopmentServer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+using TodoApp.Models;
+using TodoApp.Services;
 
 namespace TodoApp
 {
@@ -23,6 +26,8 @@ namespace TodoApp
 
             services.AddControllersWithViews();
 
+            services.AddSingleton<TodoService>();
+            
             // In production, the React files will be served from this directory
             services.AddSpaStaticFiles(configuration =>
             {
