@@ -160,9 +160,39 @@ To create a simple todo app with react, dotnet and mongodb refer : https://githu
     nishants/todo_app
   ```
 
-- Not that we have used the host as `host.docker.internal` instead of localhost. This is so because when app is running as a container (isolated process), localhost for it is the container itelself and not our system.
+- Note that we have used the host as `host.docker.internal` instead of localhost. This is so because when app is running as a container (isolated process), localhost for it is the container itelself and not our system.
 
 
+
+### A nicer way of networking
+
+- Note that we have used the host as `host.docker.internal` instead of localhost. This is so because when app is running as a container (isolated process), localhost for it is the container itelself and not our system.
+
+- Now we will create an isolated container for our app. We will run the mongo and app in that isolated network.
+
+- Create docker network : 
+
+  ```bash
+  docker network create todo-net
+  
+  # Run the docker in this network	
+  docker run  -i -v \
+  	$PWD/db:/data/db \
+  	-p 27017:27017 \
+  	--network=todo-net \
+  	--name=mongo-on-docker\
+  	mongo:3.6.18 
+  
+  
+  # Run app in this network and refer mongo as a host
+  docker run \
+    -p 5000:80 \
+    --network=todo-net\
+    -e TODO_APP_MongoSettings__ConnectionString="mongodb://mongo-on-docker:27017" \
+    nishants/todo_app
+  ```
+
+  
 
 
 
