@@ -1,385 +1,135 @@
 
 
-To create a simple todo app with react and dotnet refer : https://github.com/dotnet-school/dotnet-react
-
-Refer official doc : https://docs.microsoft.com/en-us/aspnet/core/tutorials/first-mongo-app?view=aspnetcore-3.1&tabs=visual-studio
-
-
-
-### Steps to add mongo
-
-- Add mongo driver Nuget package
-- create mongo configuration in app settings
-- create model for mongo settings
-- wire mongo setting with dependency injection in Startup.cs
-- create a singleton service that uses mongo client
-- inject settings in service and initialize mongo client
-- wire controller to use the service
-- update model for mappign mongo ids
-
-
-
-### Install mongodb on local machine
-
-- install mongodb and make sure it works on local machine
-
-- use a gui tool like https://robomongo.org/
-
-- We can instead use docker to install mongo db in single step and remove image when we are done : 
-
-  ```bash
-  docker run  -i -v $PWD/db:/data/db -p 27017:27017 mongo:3.6.18
-  ```
-
-  - this will start a docker container that listens to port `27017`
-  - take a note of the db directory `$PWD/db`. If you change this, you will not see the data you saved earlier.
-  - you can run this as a backgroudn task (daemon mode) using flag `-d`
-  - connect with db to make sure our db is up and running 
+To create a simple todo app with react, dotnet and mongodb refer : https://github.com/dotnet-school/dotnet-mongodb
 
 
 
 ### Setup project
 
-- clone this repo  https://github.com/dotnet-school/dotnet-react
+- clone this repo  https://github.com/dotnet-school/dotnet-mongodb 
 
-- Creating a servivce
+- Run mongo as docker container : 
 
-  - Currenlty this has all fake logic in controller, we will move this logic to service 
-  - Then we will make this serice use mongo client to save and fetch data from database
-
-- Create a service :  `TodoApp/Services/TodoService.cs`
-
-  ```c#
-  using System.Collections.Generic;
-  using System.Linq;
-  using MongoDB.Driver;
-  using TodoApp.Models;
-  
-  namespace TodoApp.Services
-  {
-    public class TodoService
-    {
-    }
-  }
+  ```
+  docker run  -i -v $PWD/db:/data/db -p 27017:27017 mongo:3.6.18
   ```
 
-- Now wire this with the dependency injection in `Startup.cs` : 
+- Run our app 
 
-  ```diff
-  public void ConfigureServices(IServiceCollection services)
-  {
-  	services.AddControllersWithViews();
-  +	services.AddSingleton<TodoService>();
+  ```
+  dotnet run
   ```
 
-- Inject the service in controller: 
+- Check if everything is working : https://localhost:5001/
 
-  ```diff
-  public class TodosController : ControllerBase
-  {
-  
-  +		private TodoService _todoService;
-  +		public TodosController(TodoService service)
-  +		{
-  +			_todoService = service;
-  +		}
-  
-  [HttpGet]
-  ```
 
-- Now just move all code for fake data items from controller to service: 
 
-  controller: 
+### Pass connection string as environment variable
 
-  ```c#
-  using System.Collections.Generic;
-  using Microsoft.AspNetCore.Mvc;
-  using TodoApp.Models;
-  using TodoApp.Services;
-  
-  namespace TodoApp.Controllers
-  {
-    [ApiController]
-    [Route("/api/[controller]")]
-    public class TodosController : ControllerBase
-    {
-      private TodoService _todoService;
-  
-      public TodosController(TodoService service)
-      {
-        _todoService = service;
-      }
-  
-      [HttpGet]
-      public IEnumerable<TodoItem> GetAll()
-      {
-        return _todoService.GetAll();
-      }
-  
-      [HttpGet("{id}")]
-      public ActionResult<TodoItem> GetById(string id)
-      {
-        var todoItem = _todoService.GetById(id);
-        if (todoItem == null) return NotFound();
-        return todoItem;
-      }
-  
-      [HttpPost]
-      public ActionResult CreateItem(TodoItem data)
-      {
-        TodoItem todoItem = _todoService.CreateItem(data);
-        return CreatedAtAction("GetById", new {Id = todoItem.Id}, todoItem);
-      }
-  
-      [HttpPut("{id}")]
-      public ActionResult GetById(string id, TodoItem data)
-      {
-        if (id != data.Id) return BadRequest("Ids in path and data do not match");
-  
-        var item = _todoService.GetById(id);
-  
-        if (item == null) return NotFound();
-  
-        _todoService.UpdateItem(data);
-  
-        return Ok();
-      }
-  
-      [HttpDelete("{id}")]
-      public ActionResult DeleteTas(string id)
-      {
-        var item = _todoService.GetById(id);
-        if (item == null) return NotFound();
-  
-        _todoService.Delete(item);
-        return Ok();
-      }
-    }
-  }
-  ```
-
-  service: 
-
-  ```c#
-  using System.Collections.Generic;
-  using System.Linq;
-  using TodoApp.Models;
-  
-  namespace TodoApp.Services
-  {
-    public class TodoService
-    {
-      private static IList<TodoItem> fakeItems = new List<TodoItem>()
-      {
-              new TodoItem() {Id = "one", Description = "task one", IsCompleted = true},
-              new TodoItem() {Id = "two", Description = "task two", IsCompleted = false},
-              new TodoItem() {Id = "three", Description = "task three", IsCompleted = false}
-      };
-  
-      public IEnumerable<TodoItem> GetAll()
-      {
-        return fakeItems;
-      }
-  
-      public TodoItem GetById(string id)
-      {
-        return fakeItems.First(item => item.Id == id);
-      }
-  
-      public TodoItem UpdateItem(TodoItem data)
-      {
-        var item = fakeItems.First(item => item.Id == data.Id);
-        item.Description = data.Description;
-        item.IsCompleted = data.IsCompleted;
-        return item;
-      }
-  
-      public TodoItem CreateItem(TodoItem data)
-      {
-        data.Id = $"task-{fakeItems.Count}";
-        fakeItems.Add(data);
-        return data;
-      }
-  
-      public void Delete(TodoItem item)
-      {
-        fakeItems.Remove(item);
-      }
-    }
-  }
-  ```
-
-  
-
-### Setup Mongo with .NET project
-
-- Add mongo driver Nuget package
-
-  ```bash
-  cd TodoApp
-  dotnet add package MongoDB.Driver
-  ```
-	TodoApp.csproj:
-  ```diff
-     <ItemGroup>
-       <PackageReference Include="Microsoft.AspNetCore.SpaServices.Extensions" Version="3.1.0" />
-  +    <PackageReference Include="MongoDB.Driver" Version="2.10.4" />
-     </ItemGroup>
-  
-     <ItemGroup>
-  ```
-
-  
-  
-- Create the mongo db settings in `appsettings.Development.json`
+- Currently our docker connection string is defined in appsettings.json as : 
 
   ```yaml
-    "MongoSettings": {
-      "ConnectionString": "mongodb://localhost:27017",
-      "DbName": "dotnet-mongo-demo",
-      "TodoCollection": "Todo"
-    }
+  "MongoSettings": {
+    "ConnectionString": "mongodb://localhost:27017", # This should come from env variable
+    "DbName": "dotnet-mongo-demo",                   # This should come from env variable
+    "TodoCollection": "Todo"
+  },
   ```
-
-- Create a model class that represents the settings.
-
-  - dotnet will load settings in object of this model 
-
-  - our service will recive this model to configure the mongo client
-
-    ```c#
-    namespace TodoApp.Models
-    {
-      public class MongoSettings
-      {
-        public string ConnectionString { get; set; }
-        public string DbName { get; set; }
-        public string TodoCollection { get; set; }
-      }
-    }
-    ```
 
   
 
-- Wire the settings with DI in `TodoApp/Startup.cs`
+- We need to make the configuration string based on env variable. This will give us the flexibilty to set it at runtime.
+
+- To do this, we will run the app with env variable that should override the settings in appsettings.json. Read this for more info on env var config provider : https://docs.microsoft.com/en-us/aspnet/core/fundamentals/configuration/?view=aspnetcore-3.1#evcp
+
+- In Program.cs, create a env prefix. Any env variable with the prefix `TODO_APP_`  will override the values in appsettings.json
 
   ```diff
-  +using Microsoft.Extensions.Options;
-  +using TodoApp.Models;
-  
-  public void ConfigureServices(IServiceCollection services)
-  {
-  
-    services.AddControllersWithViews();
-  
-  + // This will map the model class to the section in appsettings.json
-  + services.Configure<MongoSettings>(Configuration.GetSection(nameof(MongoSettings)));
-  
-  + // This will inject the values from appsettings into model instance
-  + services.AddSingleton<MongoSettings>(s => s.GetRequiredService<IOptions<MongoSettings>>().Value);
-  
-    services.AddSpaStaticFiles(configuration =>
-  ```
-
-
-
-- Inject the settings into service: 
-
-  - We wil now inject these settings from `appsettings.json` into our service
-
-    ```diff
-    + using MongoDB.Driver;
-    using TodoApp.Models;
-
-    namespace TodoApp.Services
-    {
-      public class TodoService
+  public static IHostBuilder CreateHostBuilder(string[] args) =>
+  	Host.CreateDefaultBuilder(args)
+  +		.ConfigureAppConfiguration((hostingContext, config) =>
+  +		{
+  +	    config.AddEnvironmentVariables(prefix: "TODO_APP_");
+  +   })
+      .ConfigureWebHostDefaults(webBuilder =>
       {
-    +    private IMongoCollection<TodoItem> _todosCollection;
-    +    public TodoService(MongoSettings settings)
-    +    {
-    +      _todosCollection = new MongoClient(settings.ConnectionString)
-    +              .GetDatabase(settings.DbName)
-    +              .GetCollection<TodoItem>(settings.TodoCollection);
-    +    }
-      }
-    }
-  ```
-
-  
-
-- Update model for mongo 
-
-  ```diff
-  +using MongoDB.Bson;
-  +using MongoDB.Bson.Serialization.Attributes;
-  +
-   namespace TodoApp.Models
-   {
-     public class TodoItem
-     {
-  +    // Mongo uses BsonId for keys
-  +    [BsonId]
-  +    [BsonRepresentation(BsonType.ObjectId)]
-       public string Id {get;set;}
-  
-       public string Description {get; set;}
-       public bool IsCompleted {get; set;}
-     }
-  ```
-
-  
-
-- Now update service to read/write using mongo collectoins instead of im memory list
-
-  ```c#
-  using System.Collections.Generic;
-  using System.Linq;
-  using MongoDB.Driver;
-  using TodoApp.Models;
-  
-  namespace TodoApp.Services
-  {
-    public class TodoService
-    {
-      private IMongoCollection<TodoItem> _todosCollection;
-  
-      public TodoService(MongoSettings settings)
-      {
-        _todosCollection = new MongoClient(settings.ConnectionString)
-                .GetDatabase(settings.DbName)
-                .GetCollection<TodoItem>(settings.TodoCollection);
-      }
-  
-      public IEnumerable<TodoItem> GetAll()
-      {
-        return _todosCollection.Find(t => true).ToList();
-      }
-  
-      public TodoItem GetById(string id)
-      {
-        return _todosCollection.Find(t => t.Id == id).First();
-      }
-  
-      public TodoItem UpdateItem(TodoItem data)
-      {
-        _todosCollection.ReplaceOne(t => t.Id == data.Id, data);
-        return data;
-      }
-  
-      public TodoItem CreateItem(TodoItem data)
-      {
-        _todosCollection.InsertOne(data);
-        return data;
-      }
-  
-      public void Delete(TodoItem item)
-      {
-        _todosCollection.DeleteOne(t => t.Id == item.Id);
-      }
-    }
+    	  webBuilder.UseStartup<Startup>();
+      });
   }
   ```
 
-  
+- Now lets set the environment variable with the mongo connection string
 
+  ```bash
+  # note there is two _ between MongoSettings and ConnectionString
+  export TODO_APP_MongoSettings__ConnectionString="mongodb://localhost:27017"
+  ```
+
+  - remove the connection string to test out configuration.
+
+- Now remove the `ConnectionString` value form appsettings.json 
+
+  ```DIFF
+    "MongoSettings": {
+  -   "ConnectionString": "mongodb://localhost:27017",
+  +   "ConnectionString": "INJECT_AT_RUNTIME",
+      "DbName": "dotnet-mongo-demo",
+      "TodoCollection": "Todo"
+    },
+  ```
+
+- and run the app again
+
+  ```
+  dotnet run
+  ```
+
+- Our app is now picking up connection string from environment variable.
+
+
+
+### Create docker container for app
+
+- Create a multi-stage docker file for compiling and running our app : 
+
+  ```dockerfile
+  # Stage 1: Use an image with sdk (so that we can compile and build app)
+  FROM mcr.microsoft.com/dotnet/core/sdk:3.1 AS build
+  WORKDIR /source
+  
+  # Run dotnet restore
+  COPY *.csproj .
+  RUN dotnet restore
+  
+  # Copy rest of project and publish app int /app directory
+  COPY . .
+  RUN dotnet publish -c release -o /app --no-restore
+  
+  # Stage 2: We do not need the sdk in final image, just runtime (smaller efficient image)
+  FROM mcr.microsoft.com/dotnet/core/aspnet:3.1
+  WORKDIR /app
+  
+  # Copy files form previous stage 
+  COPY --from=build /app .
+  
+  EXPOSE 80
+  ENTRYPOINT ["dotnet", "01-todo-api.dll"]
+  ```
+
+- Create a `.dockerignore`. This works like `.gitignore`. It tells docker to ignore these files when we copy things into our docker image
+
+  ```yaml
+  # directories
+  **/bin/
+  **/obj/
+  **/out/
+  
+  #ides
+  **/.idea
+  **/.vscode
+  
+  # files
+  Dockerfile*
+  ```
+
+- Now run the app 
