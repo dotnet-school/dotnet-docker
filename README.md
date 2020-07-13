@@ -90,12 +90,41 @@ To create a simple todo app with react, dotnet and mongodb refer : https://githu
 
 ### Create docker container for app
 
+- Create a `.dockerignore`. This works like `.gitignore`. It tells docker to ignore these files when we copy project files into our docker image
+
+  ```yaml
+  # directories
+  **/bin/
+  **/obj/
+  **/out/
+  
+  # react project
+  **/node_modules/
+  **/build/
+  
+  #ides
+  **/.idea
+  **/.vscode
+  
+  # files
+  Dockerfile*
+  ```
+  
 - Create a multi-stage docker file for compiling and running our app : 
 
   ```dockerfile
   # Stage 1: Use an image with sdk (so that we can compile and build app)
   FROM mcr.microsoft.com/dotnet/core/sdk:3.1 AS build
   WORKDIR /source
+  
+  # Our base image has dotnet sdk but not nodejs
+  # So we will instal nodejs to build our react project
+  # //github.com/nodesource/distributions/blob/master/README.md#deb
+  RUN apt-get update -yq 
+  RUN apt-get install curl gnupg -yq 
+  RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
+  RUN apt-get install -y nodejs
+  
   
   # Run dotnet restore
   COPY *.csproj .
@@ -105,7 +134,7 @@ To create a simple todo app with react, dotnet and mongodb refer : https://githu
   COPY . .
   RUN dotnet publish -c release -o /app --no-restore
   
-  # Stage 2: We do not need the sdk in final image, just runtime (smaller efficient image)
+  # Stage 2: We do not need the sdk and nodejs in final image, just runtime (smaller efficient image)
   FROM mcr.microsoft.com/dotnet/core/aspnet:3.1
   WORKDIR /app
   
@@ -113,23 +142,32 @@ To create a simple todo app with react, dotnet and mongodb refer : https://githu
   COPY --from=build /app .
   
   EXPOSE 80
-  ENTRYPOINT ["dotnet", "01-todo-api.dll"]
+  ENTRYPOINT ["dotnet", "TodoApp.dll"]
   ```
 
-- Create a `.dockerignore`. This works like `.gitignore`. It tells docker to ignore these files when we copy things into our docker image
+- Build the docker image : 
 
-  ```yaml
-  # directories
-  **/bin/
-  **/obj/
-  **/out/
-  
-  #ides
-  **/.idea
-  **/.vscode
-  
-  # files
-  Dockerfile*
+  ```
+  docker build -t nishants/todo_app .
   ```
 
-- Now run the app 
+- Now we can pass the env variable to the image and pass our connection to mongodb :
+
+  ```bash
+  docker run \
+    -p 5000:80 \
+    -e TODO_APP_MongoSettings__ConnectionString="mongodb://host.docker.internal:27017" \
+    nishants/todo_app
+  ```
+
+- Not that we have used the host as `host.docker.internal` instead of localhost. This is so because when app is running as a container (isolated process), localhost for it is the container itelself and not our system.
+
+
+
+
+
+### Improving docker build time
+
+- Currently every time we build the image, we download and install nodejs in the base sdk image
+- Better way to work is to create an image with sdk base, install node js in it, say `nishants/dotnet-core-sdk:3.1-node14`
+- And then use this image as a base image for compiling in our Dockerfile.

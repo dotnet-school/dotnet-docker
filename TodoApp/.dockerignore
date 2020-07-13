@@ -1,0 +1,15 @@
+# directories
+**/bin/
+**/obj/
+**/out/
+
+# react project
+**/node_modules/
+**/build/
+
+#ides
+**/.idea
+**/.vscode
+
+# files
+Dockerfile*
