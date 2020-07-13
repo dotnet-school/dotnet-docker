@@ -166,9 +166,7 @@ To create a simple todo app with react, dotnet and mongodb refer : https://githu
 
 ### A nicer way of networking
 
-- Note that we have used the host as `host.docker.internal` instead of localhost. This is so because when app is running as a container (isolated process), localhost for it is the container itelself and not our system.
-
-- Now we will create an isolated container for our app. We will run the mongo and app in that isolated network.
+- Now we will create an isolated network for our app. We will run the mongo and app in that isolated network.
 
 - Create docker network : 
 
